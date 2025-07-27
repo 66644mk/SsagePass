@@ -32,13 +32,21 @@ jobs:
             -w /workspace \
             ${{ env.IMAGE_NAME }} \
             bash -c "
-              mkdir -p build && cd build
+              # 1. 安装缺失工具
+              apt-get update -qq && apt-get install -y --no-install-recommends cmake build-essential
+
+              # 2. 保证干净构建
+              rm -rf build
+              mkdir build && cd build
+
+              # 3. 生成 Makefile 并编译
               cmake .. \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DLLVM_DIR=/opt/llvm-14.0.6/lib/cmake/llvm \
                 -DCMAKE_CXX_COMPILER=/opt/llvm-14.0.6/bin/clang++
               make -j$(nproc)
             "
+
 
       # 整理打包结构，方便 AIDE 用户直接放到 NDK toolchain 里
       - name: Package for AIDE-NDK
@@ -57,5 +65,13 @@ jobs:
           name: Android OLLVM NDK ${{ github.ref_name }}
           body: |
             预编译的 SsagePass LLVM Pass 动态库（Android NDK r25）
-        
-
+            用法：
+            1. 解压 `aide-ollvm-ndk.tar.gz` 到任意目录
+            2. 在 AIDE 的 `Application.mk` 或 `CMakeLists.txt` 里添加：
+               ```
+               LOCAL_CPPFLAGS += -fpass-plugin=/path/to/libSsageObfuscator.so
+               ```
+            3. 在需要混淆的函数上添加：
+               ```cpp
+               __attribute((__annotate__(("fla split strenc"))))
+               ```
