@@ -28,28 +28,26 @@ jobs:
             ${{ env.IMAGE_NAME }} \
             bash -c "
               set -e
-
-              # 1. 安装基础工具
               apt-get update -qq
               apt-get install -y --no-install-recommends wget build-essential
 
-              # 2. 手动安装官方静态二进制 cmake 3.20.6
+              # 安装 cmake 3.20+
               CMAKE_VER=3.20.6
               wget -qO- https://github.com/Kitware/CMake/releases/download/v\${CMAKE_VER}/cmake-\${CMAKE_VER}-linux-x86_64.tar.gz \
                 | tar -xz -C /opt
               export PATH=/opt/cmake-\${CMAKE_VER}-linux-x86_64/bin:\$PATH
-              cmake --version   # 验证 ≥ 3.13.4
 
-              # 3. 干净构建
+              # 干净构建
               rm -rf build
               mkdir build && cd build
               cmake .. \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DLLVM_DIR=/opt/llvm-14.0.6/lib/cmake/llvm \
+                -DCMAKE_C_COMPILER=/opt/llvm-14.0.6/bin/clang \
                 -DCMAKE_CXX_COMPILER=/opt/llvm-14.0.6/bin/clang++
               make -j\$(nproc)
 
-              # 4. 打包
+              # 打包
               mkdir -p /tmp/aide-ollvm-ndk/lib/clang/14.0.6/lib/linux
               cp libSsageObfuscator.so /tmp/aide-ollvm-ndk/lib/clang/14.0.6/lib/linux/
               cp ../HowToUse /tmp/aide-ollvm-ndk/README.md
