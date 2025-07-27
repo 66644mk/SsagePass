@@ -32,20 +32,19 @@ jobs:
             -w /workspace \
             ${{ env.IMAGE_NAME }} \
             bash -c "
-              # 1. 安装缺失工具
-              apt-get update -qq && apt-get install -y --no-install-recommends cmake build-essential
+              # 1. 安装 make（镜像里缺）
+              apt-get update -qq && apt-get install -y --no-install-recommends make g++
 
-              # 2. 保证干净构建
+              # 2. 清理上次的残留
               rm -rf build
               mkdir build && cd build
 
-              # 3. 生成 Makefile 并编译
-              cmake .. \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DLLVM_DIR=/opt/llvm-14.0.6/lib/cmake/llvm \
-                -DCMAKE_CXX_COMPILER=/opt/llvm-14.0.6/bin/clang++
-              make -j$(nproc)
+              # 3. 指向作者准备好的 Makefile
+              make -f ../Makefile \
+                LLVM_CONFIG=/opt/llvm-14.0.6/bin/llvm-config \
+                -j$(nproc)
             "
+
 
 
       # 整理打包结构，方便 AIDE 用户直接放到 NDK toolchain 里
