@@ -1,15 +1,14 @@
-# .github/workflows/android-ollvm-ndk.yml
 name: Android-OLLVM-NDK
 
 on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:   # 允许手动触发
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ssageparuders/android_llvm_14.06:18.04   # 作者提供的镜像
+  IMAGE_NAME: ssageparuders/android_llvm_14.06:18.04
 
 jobs:
   build:
@@ -21,46 +20,41 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # 把仓库映射到容器里 /workspace 目录，直接用镜像里的 clang/llvm/ndk 全套工具链
-      - name: Build SsagePass inside Android-LLVM image
+      - name: Build & Package inside Android-LLVM image
         run: |
           docker run --rm \
             -v "$PWD":/workspace \
-            -w /workspace \
+            -w /workspace/Obfuscation \
             ${{ env.IMAGE_NAME }} \
             bash -c "
-              # 1. 安装 make（镜像里缺）
-              apt-get update -qq && apt-get install -y --no-install-recommends make g++
+              set -e
+              # 1. 安装缺失工具
+              apt-get update -qq
+              apt-get install -y --no-install-recommends cmake build-essential
 
-              # 2. 清理上次的残留
+              # 2. 干净构建
               rm -rf build
               mkdir build && cd build
+              cmake .. \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DLLVM_DIR=/opt/llvm-14.0.6/lib/cmake/llvm \
+                -DCMAKE_CXX_COMPILER=/opt/llvm-14.0.6/bin/clang++
+              make -j\$(nproc)
 
-              # 3. 指向作者准备好的 Makefile
-              make -f ../Makefile \
-                LLVM_CONFIG=/opt/llvm-14.0.6/bin/llvm-config \
-                -j$(nproc)
+              # 3. 打包 AIDE-NDK 结构
+              mkdir -p /tmp/aide-ollvm-ndk/lib/clang/14.0.6/lib/linux
+              cp libSsageObfuscator.so /tmp/aide-ollvm-ndk/lib/clang/14.0.6/lib/linux/
+              cp ../HowToUse /tmp/aide-ollvm-ndk/README.md
+              cd /tmp
+              tar -czf aide-ollvm-ndk.tar.gz aide-ollvm-ndk
+              cp aide-ollvm-ndk.tar.gz /workspace/
             "
-
-
-
-      # 整理打包结构，方便 AIDE 用户直接放到 NDK toolchain 里
-      - name: Package for AIDE-NDK
-        run: |
-          mkdir -p aide-ollvm-ndk/{bin,lib/clang/14.0.6/lib/linux}
-          cp build/libSsageObfuscator.so aide-ollvm-ndk/lib/clang/14.0.6/lib/linux/
-          cp HowToUse aide-ollvm-ndk/README.md
-          tar -czf aide-ollvm-ndk.tar.gz aide-ollvm-ndk
 
       - name: Upload Release Asset
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            aide-ollvm-ndk.tar.gz
+          files: aide-ollvm-ndk.tar.gz
           name: Android OLLVM NDK ${{ github.ref_name }}
           body: |
             预编译的 SsagePass LLVM Pass 动态库（Android NDK r25）
